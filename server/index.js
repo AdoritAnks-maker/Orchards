@@ -18,11 +18,16 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
-const requiredProductionConfig = ['MONGODB_URI', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM'];
+const requiredProductionConfig = ['MONGODB_URI', 'EMAIL_FROM'];
 const missingProductionConfig = requiredProductionConfig.filter((name) => !process.env[name]);
+const hasBrevoApi = Boolean(process.env.BREVO_API_KEY);
+const hasSmtpConfig = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'].every((name) => process.env[name]);
 
 if (process.env.NODE_ENV === 'production' && missingProductionConfig.length) {
   throw new Error(`Missing required production environment variables: ${missingProductionConfig.join(', ')}`);
+}
+if (process.env.NODE_ENV === 'production' && !hasBrevoApi && !hasSmtpConfig) {
+  throw new Error('Missing email configuration: set BREVO_API_KEY or SMTP_HOST, SMTP_USER, and SMTP_PASS.');
 }
 
 app.disable('x-powered-by');
@@ -85,6 +90,42 @@ app.get('/api/payment-config', (_req, res) => res.json({
   upiId: process.env.UPI_ID || null,
   razorpayEnabled: Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
 }));
+async function sendEnquiryEmail(data) {
+  const subject = `New orchard enquiry from ${data.name}`;
+  const text = `Name: ${data.name}\nEmail: ${data.email}\nPhone: ${data.phone}\nInterest: ${data.interest || 'General enquiry'}\n\nMessage:\n${data.message}`;
+
+  // Render Free blocks outbound SMTP ports. Prefer Brevo's HTTPS API when configured.
+  if (hasBrevoApi) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sender: { name: "Bhardwaj's Orchard Website", email: process.env.EMAIL_FROM },
+        to: [{ email: contactRecipient }],
+        replyTo: { email: data.email, name: data.name },
+        subject,
+        textContent: text
+      })
+    });
+    if (!response.ok) throw new Error(`Brevo API request failed with status ${response.status}.`);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true',
+    requireTLS: process.env.SMTP_REQUIRE_TLS !== 'false',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  });
+  await transporter.sendMail({
+    from: `Bhardwaj's Orchard Website <${process.env.EMAIL_FROM}>`,
+    to: contactRecipient,
+    replyTo: data.email,
+    subject,
+    text
+  });
+}
 app.post('/api/contact', contactLimit, async (req, res, next) => {
   try {
     const data = {
@@ -102,22 +143,7 @@ app.post('/api/contact', contactLimit, async (req, res, next) => {
     const collection = await enquiries();
     if (collection) await collection.insertOne(data);
 
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_SECURE === 'true',
-        requireTLS: process.env.SMTP_REQUIRE_TLS !== 'false',
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      });
-      await transporter.sendMail({
-        from: `Bhardwaj's Orchard Website <${process.env.EMAIL_FROM}>`,
-        to: contactRecipient,
-        replyTo: data.email,
-        subject: `New orchard enquiry from ${data.name}`,
-        text: `Name: ${data.name}\nEmail: ${data.email}\nPhone: ${data.phone}\nInterest: ${data.interest || 'General enquiry'}\n\nMessage:\n${data.message}`
-      });
-    }
+    await sendEnquiryEmail(data);
     res.status(201).json({ message: 'Thank you. Your message has been sent to Ankush.' });
   } catch (error) { next(error); }
 });

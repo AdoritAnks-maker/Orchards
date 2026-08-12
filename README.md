@@ -12,7 +12,7 @@ A deployable apple-orchard catalogue and enquiry site with a responsive catalogu
 
 ## Contact enquiries
 
-`POST /api/contact` validates the visitor's name, email, phone number, and message. It stores the enquiry in MongoDB and emails the details to `CONTACT_TO` through Brevo when SMTP is configured.
+`POST /api/contact` validates the visitor's name, email, phone number, and message. It stores the enquiry in MongoDB and emails the details to `CONTACT_TO` through Brevo. On Render Free, configure `BREVO_API_KEY` so email is sent through Brevo's HTTPS API instead of blocked SMTP ports.
 
 This project is configured for Brevo SMTP, which has a free transactional-email plan. Create an SMTP key in Brevo and verify `EMAIL_FROM` as a sender. Put the SMTP key in `SMTP_PASS`; do not use or commit a Brevo account password or API key.
 
@@ -21,8 +21,9 @@ This project is configured for Brevo SMTP, which has a free transactional-email 
 This project works on any Node.js host (Render, Railway, Fly.io, VPS, etc.). Configure these values in the host's secret/environment-variable dashboard. The contact recipient defaults to `ankushworks09@gmail.com`, but set it explicitly as well:
 
 - `MONGODB_URI` and optional `MONGODB_DB`
-- `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`
-- `SMTP_USER` (Brevo SMTP login), `SMTP_PASS` (Brevo SMTP key), `EMAIL_FROM` (a verified Brevo sender)
+- `BREVO_API_KEY` (recommended on Render Free; create it in Brevo's **Settings > SMTP & API > API Keys & MCP**)
+- Or, on hosts that allow SMTP: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER` (Brevo SMTP login), and `SMTP_PASS` (Brevo SMTP key)
+- `EMAIL_FROM` (a verified Brevo sender)
 - `CONTACT_TO=ankushworks09@gmail.com`
 - `FRONTEND_ORIGIN` (your final public website URL)
 
