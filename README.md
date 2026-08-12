@@ -2,6 +2,10 @@
 
 A deployable apple-orchard catalogue and enquiry site with a responsive catalogue, cart, orchard video, farm-visit enquiries, MongoDB persistence, and email notifications. The basket collects items for an enquiry; it is not a payment checkout.
 
+## Live website
+
+https://bhardwaj-orchards-web.onrender.com
+
 ## Run locally
 
 1. Install Node.js 20 or later.
